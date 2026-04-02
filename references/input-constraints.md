@@ -1,16 +1,18 @@
 # 用户输入约束 — 便于稳定生成
 
-## 策略 A：优先使用「草稿 YAML」（推荐）
+用户不需要接触 YAML 模板。Agent 负责从用户输入中提取信息并内部归一化。
 
-1. Agent 复制 [trip-draft.template.yaml](trip-draft.template.yaml) 到用户指定路径，例如 `.local/trips/my-trip.source.yaml`。
-2. 用户**只在该文件**内按注释填充；Agent **只认**该结构生成 HTML。
-3. 优点：类型边界清晰（住宿 ≠ 路线）；缺字段可留空或 `null`。
+## 输入方式 A：Markdown 文件（最常见）
 
-若用户坚持 Notion/表格，Agent 应把表格**映射**到下列字段名（或先转成 YAML 再生成）。
+用户提供 `.md` 文件，格式自由。Agent 读取后按 [content-taxonomy.md](content-taxonomy.md) 归类，内部转为结构化数据（字段定义见 [trip-draft.template.yaml](trip-draft.template.yaml)）。
+
+常见格式：按日分段（`## Day 1`）、列表、表格、甚至口语化散文。Agent 应能处理所有这些变体。
 
 ---
 
-## 策略 B：Notion 数据库 — 建议列名
+## 输入方式 B：Notion 页面链接
+
+用户给出 Notion URL，Agent 通过 MCP 或浏览器读取。若为 Notion 数据库，建议列名如下（用户不一定严格遵守，Agent 应灵活匹配）：
 
 **一行 = 一个「日历日」**（或「半天」若你明确拆分）。
 
@@ -39,21 +41,9 @@ dinner | 19:00 | 店名 | 地址 | walk-in |
 
 ---
 
-## 策略 C：Markdown 表格
+## 输入方式 C：对话粘贴
 
-表头至少包含：`Date | Day title | Schedule | Routes | Hotel | Dining | Notes`
-
-- `Schedule`：单元格内用 `<br>` 或分号分隔多条 `时间 — 活动`。
-- `Routes`：每行一个 URL，或 `主:` / `备:` 前缀。
-
----
-
-## 策略 D：用户只有散文
-
-Agent **不得**直接生成最终 HTML；应先：
-
-1. 输出**结构化草稿**（YAML 或表格），标出「推断/待确认」；
-2. 用户确认 `overnight_for`、路线 URL、订位时间后再生成页。
+用户直接在对话里粘贴行程文字。若信息不完整或有歧义，Agent 列出待确认项（如「哪一晚住哪」「路线起终点」），用户确认后再生成。
 
 ---
 
