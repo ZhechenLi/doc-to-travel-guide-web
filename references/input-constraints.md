@@ -12,7 +12,30 @@
 
 ## 输入方式 B：Notion 页面链接
 
-用户给出 Notion URL，Agent 通过 MCP 或浏览器读取。若为 Notion 数据库，建议列名如下（用户不一定严格遵守，Agent 应灵活匹配）：
+用户给出 Notion URL，Agent 读取页面内容后归类。
+
+### 读取策略（按优先级）
+
+1. **浏览器 MCP**（首选）：通过浏览器打开 Notion 页面，适用于公开和已登录的私有页面，兼容性最广。注意 Notion 使用内部滚动容器，需要在内容区域内滚动而非页面级滚动。
+2. **Notion 内部 API（公开页面 fallback）**：对于公开分享的页面，可直接 POST 请求获取完整数据，无需 token：
+   ```
+   POST https://www.notion.so/api/v3/loadPageChunk
+   Content-Type: application/json
+
+   {
+     "page": {"id": "<page-id-with-dashes>"},
+     "limit": 100,
+     "cursor": {"stack": []},
+     "chunkNumber": 0,
+     "verticalColumns": false
+   }
+   ```
+   从 URL 提取 page ID：`notion.so/<page-id>` 或 `notion.so/xxx-<page-id>`，转为带短横线的 UUID 格式。返回 JSON 中 `recordMap.block` 包含所有 block，`table_row` 的 `properties` 即各列内容。**注意**：此为非官方 API，不保证长期可用。
+3. **Notion 官方 API**：若用户配置了 Notion MCP 或提供了 integration token，优先使用官方 API。
+
+### Notion 表格建议列名
+
+若为 Notion 数据库，建议列名如下（用户不一定严格遵守，Agent 应灵活匹配）：
 
 **一行 = 一个「日历日」**（或「半天」若你明确拆分）。
 
