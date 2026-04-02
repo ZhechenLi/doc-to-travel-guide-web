@@ -9,14 +9,14 @@ Cursor **Agent Skill**：把结构化行程（YAML / Notion 表 / Markdown 表 /
 **方式 A — 用户级（所有项目可用）**
 
 ```bash
-git clone <你的仓库 URL> ~/.cursor/skills/doc-to-travel-guide-web
+git clone https://github.com/ZhechenLi/doc-to-travel-guide-web.git ~/.cursor/skills/doc-to-travel-guide-web
 ```
 
 **方式 B — 仅当前项目**
 
 ```bash
 mkdir -p .cursor/skills
-git clone <你的仓库 URL> .cursor/skills/doc-to-travel-guide-web
+git clone https://github.com/ZhechenLi/doc-to-travel-guide-web.git .cursor/skills/doc-to-travel-guide-web
 ```
 
 重启 Cursor 或重新加载窗口后，在对话里提及「按 doc-to-travel-guide-web」「行程转攻略网页」等，应能匹配 skill 描述。
@@ -24,7 +24,7 @@ git clone <你的仓库 URL> .cursor/skills/doc-to-travel-guide-web
 **方式 C — Submodule（大仓内固定版本）**
 
 ```bash
-git submodule add <你的仓库 URL> .cursor/skills/doc-to-travel-guide-web
+git submodule add https://github.com/ZhechenLi/doc-to-travel-guide-web.git .cursor/skills/doc-to-travel-guide-web
 ```
 
 ## 分发放哪里比较合适
