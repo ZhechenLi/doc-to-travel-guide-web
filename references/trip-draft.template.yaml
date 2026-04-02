@@ -1,0 +1,74 @@
+# 行程源文件草稿 — 复制本文件到例如 .local/trips/<名字>.source.yaml 后填写
+# 生成攻略页时，把路径告诉 Agent；或粘贴到对话中（注意脱敏确认号）
+# 生成 HTML 后 Agent 应另写 <同名>.sources.md 归档信息源（见 source-manifest.md）
+#
+# 内容类型说明见 content-taxonomy.md、input-constraints.md
+
+trip:
+  title: ""                    # 页面主标题
+  subtitle: ""                 # 可选，如城市英文名列表
+  date_start: ""               # YYYY-MM-DD
+  date_end: ""                 # YYYY-MM-DD
+  default_language: zh-CN
+
+  # 可选：全页级门票/准备链接
+  tickets_links: []
+  # - { name: "Uffizi", url: "https://..." }
+
+days:
+  - date: "YYYY-MM-DD"         # 该「日历日」的锚点（行程表头）
+    day_index: 1               # 展示用 Day 序号，可与日历不完全一致时手动填
+    title: ""                  # 当日标题，如 「🚂 米兰 → 威尼斯」
+
+    # 大交通：城市间移动（飞机/火车/租车起终点一句话）
+    intercity_transport: ""
+
+    # 当日驾车/步行路线（可多条：主路线、备选国境线等）
+    routes:
+      - label: ""              # 按钮文案，如 「Day 1 Google Maps 导航」
+        url: ""                # 优先：用户从 Google Maps 复制的完整链接（dir / goo.gl / search）
+        show_embed: true       # 是否在页面加「嵌入地图」折叠块
+        # 若 url 为空，可填 route_spec，由 Agent 拼接 maps/dir 链接（见 google-maps-url-builder.md）
+        route_spec:
+          travelmode: driving  # driving | walking | transit | bicycling
+          origin: ""           # 起点地名或地址（尽量具体）
+          destination: ""      # 终点
+          waypoints: []        # 途经点，按顺序；建议不超过约 8～10 个
+
+    # 时间表：仅同一天内活动顺序
+    schedule:
+      - time: ""               # 如 09:00-10:30 或 「上午」
+        activity: ""           # 主描述
+        detail: ""             # 可选小字
+
+    # 今晚住宿（无则整段注释掉或 name 留空）
+    accommodation:
+      overnight_date: ""       # 重要：指「哪一晚」入住，通常与当天 date 相同；跨日凌晨入住请写清楚
+      name: ""
+      address: ""
+      map_url: ""              # Google maps search / place
+      booking_ref: ""
+      notes: ""
+
+    # 餐饮预订/推荐（可多条）
+    dining: []
+    # - meal: lunch            # breakfast | lunch | dinner | cafe | snack
+    #   name: ""
+    #   time: ""               # 订位时间，无则 ""
+    #   address: ""
+    #   map_url: ""
+    #   reserved: false
+    #   links: []
+
+    # 可选：景点科普折叠区（每段 title + body）
+    attraction_spotlights: []
+    # - title: ""
+    #   body: ""
+
+    # 当日杂项提示
+    notes: ""
+
+# 下一日继续复制 - date: ... 块
+# - date: "YYYY-MM-DD"
+#   day_index: 2
+#   ...
