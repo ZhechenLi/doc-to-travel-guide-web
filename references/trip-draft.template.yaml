@@ -60,6 +60,12 @@ days:
     #   reserved: false
     #   links: []
 
+    # 当地美食推荐（只有菜名/食物类型，没有具体餐厅的条目）
+    # 与 dining[] 区分：dining 是可纳入行程的餐厅，food_tips 是参考性的饮食指南
+    food_tips: []
+    # - "米兰烩饭 Risotto alla Milanese"
+    # - "找 bacaro（小酒馆）点 cicchetti"
+
     # 可选：景点科普折叠区（每段 title + body）
     attraction_spotlights: []
     # - title: ""

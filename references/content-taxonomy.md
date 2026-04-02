@@ -70,7 +70,11 @@
 
 ## 6. 餐饮（Dining / reservations）
 
-**是什么**：餐厅、订位时间、地址、是否已订。
+用户的输入中，「美食」信息常常**混杂两类内容**，Agent 必须先区分：
+
+### 6a. 餐厅（Restaurant）— 可纳入行程
+
+有具体店名，通常附带地址、订位信息，是**可执行的行程节点**。
 
 | 子字段 | 说明 |
 |--------|------|
@@ -82,7 +86,25 @@
 | `reserved` | `true` / `false` |
 | `links` | 官网等 |
 
-可与「时间表」里同一顿饭**互链**：时间表一行写时间线，预订卡片写详情。
+**处理**：归入当日 `dining[]`，在时间表中体现，生成预订卡片。可与「时间表」里同一顿饭**互链**：时间表一行写时间线，预订卡片写详情。
+
+### 6b. 特色菜 / 美食推荐（Local food tips）— 参考信息
+
+只有菜名或食物类型，没有具体餐厅，是**当地饮食指南**。
+
+示例：「米兰烩饭 Risotto alla Milanese」「卡邦尼意面 Carbonara」「找 bacaro（小酒馆）」
+
+**处理**：不放进 `dining[]`，而是归入当日的 `food_tips`（或写进当日 `notes` / 独立的「当地美食」折叠块）。在 HTML 中用 `food-tips` 区域呈现（如侧栏卡片、折叠列表），与正式餐饮预订视觉区分。
+
+### 如何判断
+
+| 线索 | → 归为 |
+|------|--------|
+| 有店名 + 地址 / 地图链接 / 订位 | 餐厅 → `dining[]` |
+| 有店名但无地址，上下文暗示「推荐去」 | 餐厅 → `dining[]`（`reserved: false`） |
+| 只有菜名 / 食物类型 / 「当地必吃」 | 美食推荐 → `food_tips` |
+| 「找 bacaro」「路边摊薯条」等泛指 | 美食推荐 → `food_tips` |
+| 混合：「Bouillon Bruxelles 点 moules-frites」 | 餐厅 → `dining[]`，菜名写入 `notes` 字段 |
 
 ---
 
@@ -119,7 +141,8 @@
 | daily schedule | `ul.schedule` |
 | daily route | `map-link`、`gmap-route-from-doc`、Leaflet `dayMap*` |
 | accommodation | `rsv-card` 或独立 `accommodation` 块（可扩展） |
-| dining | `rsv-card`、`food-section` |
+| dining (餐厅) | `rsv-card`、`food-section` |
+| food_tips (美食推荐) | `food-tips`（折叠卡片 / 侧栏 / 当日底部列表） |
 | attractions | `spotlight-fold` |
 | tickets | `tickets-section` |
 | misc | `note-box` |
