@@ -20,6 +20,13 @@ days:
     day_index: 1               # 展示用 Day 序号，可与日历不完全一致时手动填
     title: ""                  # 当日标题，如 「🚂 米兰 → 威尼斯」
 
+    # 当日行程类型（Agent 自动识别，影响地图展示方式）
+    # drive    — 自驾日：城际路段+途经景点，地图画完整驾车路线
+    # city     — City walk：同一城市内步行/公交，地图标注点位
+    # transfer — 纯交通日：火车/飞机移动为主，不画地图，文字卡片
+    # mixed    — 半天移动+半天游玩：拆成交通段（文字）+城市段（点位地图）
+    day_type: ""               # drive | city | transfer | mixed
+
     # 大交通：城市间移动（飞机/火车/租车起终点一句话）
     intercity_transport: ""
 
