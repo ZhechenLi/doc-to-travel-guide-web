@@ -1,132 +1,167 @@
-# 不同表格来源的读取与解析
+# 外部来源的读取与解析
 
-用户的行程数据可能来自各种表格形式。不同来源的读取方式、数据结构、常见坑各不相同。Agent 应根据来源类型选择对应策略。
-
----
-
-## Notion 表格（simple table）
-
-用户给的 Notion 页面里常见的是 **simple table**（非数据库），一行一天。
-
-### 数据结构
-
-```
-page
-  └─ table (format.table_block_column_order 记录列顺序)
-       ├─ table_row (properties 里按列 ID 存各列内容)
-       ├─ table_row
-       └─ ...
-```
-
-- **第一行通常是表头**（列名），但它和数据行一样都是 `table_row`，Agent 需要自行识别
-- 列 ID 是随机短字符串（如 `=<y<`、`NDR[`），不是列名本身；需要把第一行的值当作列名映射
-- 每个单元格是**富文本数组**：`[[" 正文 "], [" 链接文字 ", [["a", "https://..."]]]]`，提取时拼接第一个元素即可得到纯文本
-
-### 读取方式
-
-1. **浏览器 MCP**（首选）：打开页面，用 `scrollIntoView` 逐段截图提取。适合公开和私有页面
-2. **内部 API**（公开页面 fallback）：`POST /api/v3/loadPageChunk`，一次返回全部 block，解析 `table_row.properties`。详见 [input-constraints.md](input-constraints.md)
-
-### 常见坑
-
-- 单元格内**换行**在 API 返回中是 `\n`，在浏览器截图中是视觉换行——两种方式都能拿到，但截图可能因行高截断
-- 单元格内的**超链接**在 API 中是富文本第二层 `[["a", "url"]]`，浏览器 snapshot 里是 `role: link`
-- Notion simple table **没有列名元数据**，列名就是第一行的内容
+用户给出一个 URL（Notion、Google Sheets、Confluence、任意网页）或文件时，Agent 不需要针对每种来源写专门的解析器。统一走**逐级降级**的导出管道，拿到一种可解析的中间格式后再进入归一化。
 
 ---
 
-## Notion 数据库（database / collection）
-
-比 simple table 更结构化，每列有明确的 type（text / date / select 等）。
-
-### 数据结构
+## 核心思路：逐级降级导出
 
 ```
-page
-  └─ collection_view (collection_id + view_ids)
-       └─ collection (schema 定义列名和类型)
-            ├─ page (每行是一个子 page，properties 按 schema key 存)
-            └─ ...
+URL / 文件
+  │
+  ▼
+① 获取完整 HTML（浏览器打开页面）
+  │
+  ▼
+② 尝试转 Markdown
+  │  ├─ 结构清晰、信息完整 → 直接用 MD 进入归一化
+  │  └─ 信息丢失（复杂布局、合并单元格、嵌入内容）↓
+  ▼
+③ 截图 / 导出 PDF
+  │  ├─ 截图：逐屏截取，基于图片做 OCR 或视觉理解
+  │  └─ PDF：如平台支持导出（Notion Export、Google Sheets 下载 PDF）
+  │
+  ▼
+④ 平台专属 API（最后手段）
+     Notion loadPageChunk / 官方 API、Google Sheets API 等
+     只在前面几步都不够时才用，因为依赖平台且可能需要 token
 ```
 
-### 读取方式
-
-1. **浏览器 MCP**：打开页面，看到的是渲染后的表格视图，逐段截图提取
-2. **内部 API**：`loadPageChunk` 返回中会有 `collection` 和 `collection_view` 记录；需要额外调 `queryCollection` 获取行数据
-3. **Notion 官方 API**（最佳）：若有 token，直接 `GET /v1/databases/{id}/query`，返回结构化的行数据
-
-### 与 simple table 的区别
-
-| | Simple Table | Database |
-|---|---|---|
-| 列名来源 | 第一行内容 | `collection.schema` |
-| 行类型 | `table_row` | 子 `page` |
-| API 解析 | `loadPageChunk` 一次拿完 | 需要 `queryCollection` |
-| 列类型 | 全是文本 | 有 date / select / relation 等 |
+**原则**：能用通用方式解决的不用专属方式。MD 够了就不截图，截图够了就不调 API。
 
 ---
 
-## Markdown 表格
+## 第 ① 步：获取完整 HTML
 
-用户直接提供 `.md` 文件中的管道符表格。
+通过浏览器 MCP 打开页面。关键操作：
 
-### 格式
+- **等待渲染**：SPA 页面（Notion、Google Sheets）需要等待 JS 渲染完成
+- **处理嵌套滚动**：用 `scrollIntoView` 跳转到页面各区域（见 browser-scroll-strategy skill）
+- **处理登录**：如果页面需要登录，浏览器 MCP 使用的是用户已登录的会话
 
-```markdown
-| 日期 | 城市 | 行程 | 备注 |
-|------|------|------|------|
-| 04.24 | 米兰 | 抵达，吃晚饭 | 深圳-布鲁塞尔-米兰 |
+此步产出：浏览器中完整渲染的页面。
+
+---
+
+## 第 ② 步：尝试转 Markdown
+
+从浏览器拿到的页面内容，尝试提取为 Markdown：
+
+### 方法 a：从页面文本直接提取
+
+- 通过 `browser_snapshot` 获取可交互元素树 + 逐段截图读取文本
+- 手动组织为 Markdown 格式（标题、列表、表格）
+
+### 方法 b：利用平台自带导出
+
+| 平台 | 导出方式 |
+|------|---------|
+| Notion | 页面右上角 `···` → Export → Markdown & CSV |
+| Google Docs | File → Download → Markdown (.md) |
+| Confluence | 页面菜单 → Export → Word（再转 MD）或直接通过 MCP 读取 |
+
+### 方法 c：HTML → Markdown 转换
+
+如果能拿到页面 HTML 源码，用工具转换：
+
+```bash
+# 示例：用 pandoc 转换
+curl -sS '<url>' | pandoc -f html -t markdown
 ```
 
-### 解析要点
+### 判断 MD 是否「够用」
 
-- 第一行是表头，第二行是分隔符 `|---|`，第三行起是数据
-- 单元格内换行：标准 Markdown 不支持单元格内换行；用户可能用 `<br>` 或直接写多行文本（非标准但常见）
-- 列对齐可能不整齐，按 `|` 分割即可
-
----
-
-## HTML 表格
-
-用户粘贴或提供来自网页的 HTML 表格。
-
-### 解析要点
-
-- `<thead>` / `<th>` 是列名，`<tbody>` / `<td>` 是数据
-- 注意 `colspan` / `rowspan` — 行程表可能有跨天合并的住宿单元格
-- 单元格内可能有 `<br>`、`<a>`、`<strong>` 等标签，需要提取纯文本 + 保留链接
+- 表格结构完整：列名 + 数据行都在
+- 链接保留：Google Maps URL、票务链接没丢
+- 多行内容没被截断：单元格内的换行、子条目都在
+- 如果以上任何一条不满足 → 降级到第 ③ 步
 
 ---
 
-## CSV / 电子表格粘贴
+## 第 ③ 步：截图 / 导出 PDF
 
-用户从 Excel / Google Sheets 复制粘贴，或提供 `.csv` 文件。
+当 Markdown 无法完整表达页面内容时：
 
-### 解析要点
+### 截图方式
 
-- 分隔符通常是逗号或 Tab
-- 第一行是列名
-- 单元格内如果有逗号，整个值会被引号包裹：`"Bouillon Bruxelles, 午餐"`
-- 从 Excel 粘贴到对话中时，列之间通常是 **Tab 分隔**，看起来像空格但不是
+1. 用 `scrollIntoView` 定位到表格各区域
+2. 逐段 `browser_take_screenshot`
+3. 基于截图进行视觉理解，提取表格数据
+
+**适用场景**：复杂布局、合并单元格、带背景色的分类标记、嵌入图片等。
+
+### PDF 导出
+
+部分平台支持导出 PDF，保留完整排版：
+
+| 平台 | PDF 导出 |
+|------|---------|
+| Notion | Export → PDF |
+| Google Sheets | File → Download → PDF |
+| 网页 | 浏览器打印 → 另存为 PDF |
+
+PDF 可交给支持 PDF 读取的工具解析。
 
 ---
 
-## 通用处理流程
+## 第 ④ 步：平台专属 API（按需）
 
-无论来源，拿到表格数据后执行相同的归一化：
+前面三步已经能覆盖绝大多数场景。只在以下情况才使用平台 API：
+
+| 场景 | API |
+|------|-----|
+| Notion 公开页面需要精确的富文本和链接 | `POST /api/v3/loadPageChunk`（无需 token） |
+| Notion 私有页面 + 有 token | 官方 API `GET /v1/pages/{id}` |
+| Google Sheets 需要精确的单元格数据 | Google Sheets API（需 API key） |
+| Confluence | 通过 Atlassian MCP 读取 |
+
+详见 [input-constraints.md](input-constraints.md) 中的 Notion API 部分。
+
+---
+
+## 各来源的特殊注意事项
+
+以下是在走通用管道时，各来源可能碰到的额外问题：
+
+### Notion
+
+- Simple table 的第一行是表头，和数据行格式一样，需自行识别
+- 内部滚动容器：用 `scrollIntoView` 驱动（非 `scroll(direction=down)`）
+- 富文本中的链接：截图中显示为蓝色文字，MD 提取中可能丢失 → 注意保留
+
+### Google Sheets
+
+- 默认视图可能只显示部分列/行，需要滚动或切换 sheet
+- 冻结行/列在截图中始终可见，注意不要重复提取
+- 单元格内的换行在 HTML 中是 `<br>`，在截图中是视觉换行
+
+### Confluence
+
+- 页面内容通常在 `#content` 区域内
+- 表格可能使用 `<th>` 合并的复杂表头
+- 通过 Atlassian MCP 读取是最稳的方式
+
+### 普通网页 HTML 表格
+
+- `colspan` / `rowspan` 合并单元格：截图能看到完整布局，但 MD 提取会丢失合并关系
+- 嵌套表格：少见但存在，逐层解析
+
+---
+
+## 归一化（统一入口）
+
+无论通过哪一步拿到数据，最终都进入同一个流程：
 
 ```
-1. 识别列名 → 映射到 taxonomy 字段（date / schedule / dining / hotel / notes / food ...）
+1. 识别列名 → 映射到 taxonomy 字段
    - 列名不一定精确匹配，按语义灵活对应
-   - 例：「美食」列 → 需区分餐厅和食物推荐（见 content-taxonomy.md §6）
+   - 「美食」列 → 区分餐厅和食物推荐（见 content-taxonomy.md §6）
 
 2. 逐行提取 → 每行对应一个 day
-   - 一行可能包含多种 taxonomy 类型的信息
 
 3. 单元格内容拆分 → 一个单元格可能有多条信息
-   - 用换行符、分号、编号等拆分
-   - 链接单独提取，归入对应字段的 url / map_url
+   - 换行符、分号、编号拆分
+   - 链接单独提取
 
-4. 归一化为内部数据模型 → trip + days[]
-   - 字段定义见 trip-draft.template.yaml
+4. 归一化为 trip + days[]（字段定义见 trip-draft.template.yaml）
 ```
